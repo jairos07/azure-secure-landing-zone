@@ -35,3 +35,15 @@ variable "subnet_workload_cidr" {
   type        = string
   default     = "10.10.2.0/24"
 }
+
+variable "efecto_politica" {
+  description = "Efecto de la política de IPs públicas: Audit (solo avisa), Deny (bloquea) o Disabled (apagada)"
+  type        = string
+  default     = "Deny" # bloquea: Azure rechaza crear IPs públicas (antes estaba en Audit)
+
+  # Si escribes un valor que no sea uno de los tres, Terraform se queja antes de tocar Azure
+  validation {
+    condition     = contains(["Audit", "Deny", "Disabled"], var.efecto_politica)
+    error_message = "El efecto debe ser Audit, Deny o Disabled."
+  }
+}
