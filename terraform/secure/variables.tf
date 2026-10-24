@@ -3,7 +3,7 @@
 variable "location" {
   description = "Región de Azure donde se crean los recursos"
   type        = string
-  default     = "westeurope" # si tu suscripción no la permite, se cambia aquí
+  default     = "germanywestcentral" # si tu suscripción no la permite, se cambia aquí
 }
 
 variable "proyecto" {
