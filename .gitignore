@@ -1,0 +1,30 @@
+# Estado de Terraform: contiene IDs de suscripción y de todos los recursos.
+# NUNCA debe subirse a un repo público.
+*.tfstate
+*.tfstate.*
+
+# Carpeta que crea "terraform init" (binarios del proveedor, pesados e inútiles en git)
+.terraform/
+
+# Variables con valores reales (IDs, claves...). Si algún día las usas, quedan fuera.
+*.tfvars
+*.tfvars.json
+
+# Planes guardados: pueden contener valores sensibles
+*.tfplan
+tfplan
+
+# Ficheros locales de configuración y registros de fallos de Terraform
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Red de seguridad: claves y secretos típicos
+.env
+*.pem
+*.key
