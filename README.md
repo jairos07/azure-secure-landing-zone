@@ -10,27 +10,26 @@ Landing zone segura en Azure definida como código. Una red segmentada sin IPs p
 
 > Proyecto de portfolio orientado a Cloud Security y Network Security. Toda la documentación está en español.
 
+## En cifras
+
+| Dato | Valor |
+|---|---|
+| Recursos definidos en Terraform | 12 (8 de red, 1 política y 3 de RBAC) |
+| Controles de seguridad | 9 |
+| Escaneo de Checkov sobre el código de red | 12 comprobaciones pasadas, 0 fallos |
+| Problemas reales documentados | 6 |
+| Regiones que permite la suscripción | 5 (se usa `germanywestcentral`) |
+| Coste del entorno desplegado | **Pendiente de verificar** en Cost Management |
+
 ## Qué es
 
-Un entorno pequeño en Azure construido con Terraform en el que la seguridad no se "pone después", sino que forma parte del código:
+Un entorno pequeño en Azure construido con Terraform en el que la seguridad no se añade después, sino que forma parte del código:
 
 1. El código se **revisa automáticamente** antes de desplegar (Checkov en GitHub Actions).
-2. La red nace **segmentada** y con todo denegado por defecto.
+2. La red nace **segmentada** y con todo lo entrante denegado por defecto.
 3. Una **política de Azure** impide crear IPs públicas, aunque alguien lo intente a mano.
 4. Los permisos siguen el **mínimo privilegio**: un rol personalizado de solo lectura.
 5. El repositorio está protegido para que **nunca se suban estados ni secretos**.
-
-## Qué demuestra
-
-| Habilidad | Evidencia en el repo |
-|---|---|
-| Infraestructura como código | `terraform/secure/` (red, política y RBAC) |
-| DevSecOps / shift-left | `.github/workflows/checkov.yml` |
-| Segmentación de red | Dos subredes con NSG de denegar-todo |
-| Guardarraíles preventivos | Política en modo `Deny` y prueba de bloqueo real |
-| Mínimo privilegio | Rol `lz-auditor-red` e identidad administrada |
-| Higiene del repositorio | `.gitignore` comprobado antes de crear estado |
-| Resolución de problemas | [`docs/hallazgos.md`](docs/hallazgos.md) |
 
 ## Arquitectura
 
@@ -66,51 +65,67 @@ Un entorno pequeño en Azure construido con Terraform en el que la seguridad no 
 
 ## Controles de seguridad
 
-| Control | Riesgo que reduce | Cómo se implementa | Fichero |
-|---|---|---|---|
-| Sin IPs públicas | Superficie de ataque expuesta a Internet | Ningún recurso de tipo IP pública en el diseño | `network.tf` |
-| Política `Deny` de IPs públicas | Que alguien cree una a mano o por error | Política integrada *Not allowed resource types* asignada al grupo de recursos | `policy.tf` |
-| NSG de denegar-todo | Entrada de tráfico no previsto | Regla explícita de prioridad 4096 en ambas subredes | `network.tf` |
-| SSH solo desde gestión | Fuerza bruta y movimiento lateral | Regla 100: puerto 22 únicamente desde `10.10.1.0/24` | `network.tf` |
-| Segmentación | Que una zona comprometida llegue a la otra | Dos subredes con su propio NSG asociado | `network.tf` |
-| Mínimo privilegio | Permisos excesivos | Rol con cinco acciones, todas `read`, limitado al grupo de recursos | `rbac.tf` |
-| Escaneo del IaC | Malas configuraciones antes de desplegar | Checkov en cada `push` y `pull request`, con permisos de solo lectura | `.github/workflows/checkov.yml` |
-| Protección del repo | Filtrar estado, variables o claves | `.gitignore` con `*.tfstate`, `*.tfvars` y `.terraform/` | `.gitignore` |
-| Etiquetado | Trazabilidad y control de costes | `proyecto`, `entorno` y `gestionado_por` en todos los recursos | `network.tf` |
+| Control | Riesgo que reduce | Cómo se implementa | Fichero | Evidencia |
+|---|---|---|---|---|
+| Sin IPs públicas | Superficie de ataque expuesta a Internet | Ningún recurso de tipo IP pública en el diseño | `network.tf` | `cap21.png` |
+| Política `Deny` de IPs públicas | Que alguien cree una a mano o por error | Política integrada *Not allowed resource types* asignada al grupo de recursos | `policy.tf` | Salida del error (evidencia 8) |
+| NSG de denegar-todo | Entrada de tráfico no previsto | Regla explícita de prioridad 4096 en ambas subredes | `network.tf` | `cap22.png` |
+| SSH solo desde gestión | Fuerza bruta y movimiento lateral | Regla 100: puerto 22 únicamente desde `10.10.1.0/24` | `network.tf` | `cap22.png` |
+| Segmentación | Que una zona comprometida llegue a la otra | Dos subredes con su propio NSG asociado | `network.tf` | `cap20.png` |
+| Mínimo privilegio | Permisos excesivos | Rol con cinco acciones, todas `read`, limitado al grupo de recursos | `rbac.tf` | `cap27.png` |
+| Escaneo del IaC | Malas configuraciones antes de desplegar | Checkov en cada `push` y `pull request`, con permisos de solo lectura | `.github/workflows/checkov.yml` | `cap6.png` y `cap8.png` |
+| Protección del repo | Filtrar estado, variables o claves | `.gitignore` con `*.tfstate`, `*.tfvars` y `.terraform/` | `.gitignore` | [Hallazgo 1](docs/hallazgos.md) |
+| Etiquetado | Trazabilidad y control de costes | `proyecto`, `entorno` y `gestionado_por` en todos los recursos | `network.tf` | `cap21.png` |
 
 ## Evidencias
 
-Las capturas están en [`img/config/`](img/config/) y los identificadores de la suscripción están tapados.
+Las capturas están en [`img/`](img/) y los identificadores de la suscripción y del directorio están tapados.
 
-**1. Escaneo local con Checkov** sobre el código de red: 12 comprobaciones pasadas y 0 fallos.
+### 1. Escaneo local con Checkov
 
-![Checkov local](img/config/01-checkov-local.png)
+Sobre el código de red: 12 comprobaciones pasadas y 0 fallos. Este escaneo se hizo antes de añadir la política y el RBAC.
 
-**2. Pipeline de GitHub Actions** ejecutando el mismo escaneo en cada cambio.
+![Checkov local](img/cap6.png)
 
-![GitHub Actions](img/config/02-github-actions-verde.png)
+### 2. Pipeline de GitHub Actions
 
-**3. Validación de Terraform** (`init` y `validate`).
+El mismo escaneo, ejecutado automáticamente en cada cambio.
 
-![Terraform validate](img/config/03-terraform-validate.png)
+![GitHub Actions](img/cap8.png)
 
-**4. Despliegue final** en una región permitida por la suscripción: 8 recursos creados y 1 reemplazado.
+### 3. Validación de Terraform
 
-![Apply final](img/config/05-apply-final.png)
+`terraform init` y `terraform validate` correctos.
 
-**5. Grupo de recursos desplegado** con la red y los dos NSG, todo etiquetado.
+![Terraform validate](img/cap17.png)
 
-![Grupo de recursos](img/config/06-portal-grupo-recursos.png)
+### 4. Despliegue final
 
-**6. Reglas del NSG de cargas de trabajo**: SSH solo desde la subred de gestión y el resto denegado.
+Hecho en una región permitida por la suscripción: 8 recursos creados y 1 reemplazado.
 
-![NSG workload](img/config/08-portal-nsg-workload.png)
+![Apply final](img/cap19.png)
 
-**7. Rol personalizado y su asignación**: cinco acciones de lectura y una asignación a una identidad administrada.
+### 5. Grupo de recursos desplegado
 
-![RBAC](img/config/09-rbac-rol-y-asignacion.png)
+La red y los dos NSG, todo etiquetado.
 
-**8. La política bloquea la creación de una IP pública.** Salida real del intento, con el identificador de suscripción sustituido:
+![Grupo de recursos](img/cap21.png)
+
+### 6. Red virtual
+
+Espacio `10.10.0.0/16`, dos subredes y región Germany West Central.
+
+![Red virtual](img/cap20.png)
+
+### 7. Reglas del NSG de cargas de trabajo
+
+SSH solo desde la subred de gestión y el resto denegado.
+
+![NSG workload](img/cap22.png)
+
+### 8. La política bloquea la creación de una IP pública
+
+Salida real del intento, con el identificador de suscripción sustituido:
 
 ```text
 (RequestDisallowedByPolicy) Resource 'pip-prueba-bloqueo' was disallowed by policy.
@@ -123,27 +138,34 @@ Code: RequestDisallowedByPolicy
 
 El intento se repitió dos veces con el mismo resultado y no se creó ninguna IP.
 
-## Estructura del repositorio
+### 9. Rol personalizado y su asignación
 
-```
-azure-secure-landing-zone/
-├── README.md
-├── .gitignore
-├── .github/workflows/
-│   └── checkov.yml        # escaneo de seguridad del IaC
-├── terraform/secure/
-│   ├── providers.tf       # versiones de Terraform y proveedor
-│   ├── variables.tf       # región, rangos de red y efecto de la política
-│   ├── network.tf         # grupo de recursos, red, subredes y NSG
-│   ├── policy.tf          # asignación de Azure Policy
-│   └── rbac.tf            # rol personalizado, identidad y asignación
-├── docs/
-│   ├── arquitectura.md    # decisiones de diseño
-│   ├── hallazgos.md       # problemas encontrados y cómo se resolvieron
-│   └── limitaciones.md    # qué no cubre y qué falta por verificar
-├── evidence/
-└── img/config/            # capturas
-```
+Cinco acciones de lectura y una asignación a una identidad administrada.
+
+![RBAC](img/cap27.png)
+
+<details>
+<summary>Más capturas del proceso</summary>
+
+#### Primer plan, con la región que luego hubo que cambiar
+
+![Plan inicial](img/cap18.png)
+
+#### Plan del rol personalizado y acciones de lectura disponibles
+
+![Plan RBAC](img/cap26.png)
+
+#### Inicio de sesión en Azure
+
+![az login](img/cap16.png)
+
+#### Versión de Terraform
+
+![Terraform version](img/cap12.png)
+
+</details>
+
+
 
 ## Requisitos
 
@@ -196,7 +218,7 @@ Los datos de Cost Management tardan hasta 24 horas en aparecer, por eso esta com
 | Bloque | Estado |
 |---|---|
 | Red segmentada con NSG | Hecho y desplegado |
-| Escaneo con Checkov en local y CI | Hecho (ver nota en limitaciones) |
+| Escaneo con Checkov en local y en CI | Hecho (ver nota en limitaciones) |
 | Azure Policy en modo `Deny` con prueba de bloqueo | Hecho |
 | RBAC de mínimo privilegio | Hecho |
 | Comprobación de coste | Pendiente |
@@ -204,19 +226,27 @@ Los datos de Cost Management tardan hasta 24 horas en aparecer, por eso esta com
 | Endurecer la salida a Internet de las subredes | Pendiente |
 
 El detalle de lo que falta está en [`docs/limitaciones.md`](docs/limitaciones.md).
+|
 
-## Documentación
+## Índice de capturas
 
-| Documento | Contenido |
+Todas están en `img/`.
+
+| Fichero | Qué muestra |
 |---|---|
-| [`docs/arquitectura.md`](docs/arquitectura.md) | Decisiones de diseño y alternativas descartadas |
-| [`docs/hallazgos.md`](docs/hallazgos.md) | Problemas reales encontrados y su solución |
-| [`docs/limitaciones.md`](docs/limitaciones.md) | Lo que el proyecto no cubre y lo que falta por verificar |
+| `cap6.png` | Escaneo local de Checkov, 12 pasadas y 0 fallos |
+| `cap8.png` | Pipeline de Checkov en verde |
+| `cap17.png` | `init` y `validate` correctos |
+| `cap18.png` | Primer plan, con la región que luego se cambió |
+| `cap19.png` | Despliegue completo en `germanywestcentral` |
+| `cap21.png` | Grupo de recursos en el portal |
+| `cap20.png` | Red virtual en el portal |
+| `cap22.png` | Reglas del NSG de cargas |
+| `cap27.png` | Rol y asignación de RBAC |
+| `cap12.png` | Versión de Terraform |
+| `cap16.png` | Inicio de sesión en Azure |
+| `cap26.png` | Plan del rol y acciones de lectura |
 
-## Lo aprendido
+## Autor
 
-- Un escaneo con 0 fallos no significa "seguro": solo revisa lo que existe en el código y las reglas que conoce.
-- Las suscripciones educativas restringen regiones mediante políticas, y `terraform plan` no lo detecta porque solo simula.
-- El `.gitignore` hay que **comprobarlo**, no darlo por supuesto: aquí faltaba y se detectó antes de crear ningún estado.
-- Una política en modo `Deny` es la diferencia entre *seguir* una buena práctica e *imponerla*.
-- El rol de Propietario en una suscripción no convierte a nadie en administrador del directorio de identidades.
+Proyecto de portfolio de [jairos07](https://github.com/jairos07).
